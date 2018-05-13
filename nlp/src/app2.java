@@ -38,6 +38,7 @@ public class app2 {
 
 	public static String getSQL(String input, Connection conn_mysql)
 			throws Exception {
+		System.out.println("Input :           " + input);
 		word_replace = new ArrayList<String[]>();
 		metadata = new ArrayList<String[]>();
 		table_join_conditions = new ArrayList<String[]>();
@@ -62,8 +63,8 @@ public class app2 {
 				nv_tables.add(rs.getString("name"));
 		}
 		rs.close();
-		System.out.println(v_tables);
-		System.out.println(nv_tables);
+		// System.out.println("Verb tables :     " + v_tables);
+		// System.out.println("Non Verb tables : " + nv_tables);
 		rs = statement.executeQuery("select * from metadata_table_join");
 		while (rs.next()) {
 			String[] words = new String[3];
@@ -94,8 +95,8 @@ public class app2 {
 		Matcher m = null;
 		// convert the whole input into lower case
 		input = input.toLowerCase();
-		System.out.println("after lower casing .....");
-		System.out.println(input);
+		// System.out.println("after lower casing .....");
+		// System.out.println(input);
 
 		// replace words
 		input = " " + input + " ";
@@ -109,8 +110,8 @@ public class app2 {
 			input = input.replaceAll("  ", " ");
 		}
 		input = input.trim();
-		System.out.println("after word replacement .....");
-		System.out.println(input);
+		// System.out.println("after word replacement .....");
+		// System.out.println(input);
 
 		// tokenizing
 		// tables in use
@@ -127,157 +128,197 @@ public class app2 {
 		System.out.println("Related tables :  " + tables_in_use);
 
 		// columns in use
-		ResultSet rs2 = conn_mysql
+		rs = conn_mysql
 				.createStatement()
 				.executeQuery(
 						"select concat(metadata_tables.name,'.',metadata_column.name) from "
 								+ "metadata_column,metadata_tables where "
 								+ "metadata_column.table_id=metadata_tables.id and metadata_tables.name in ("
 								+ listToCSVWithQuote(tables_in_use) + ")");
-		while (rs2.next()) {
-			columns.add(rs2.getString(1));
+		while (rs.next()) {
+			columns.add(rs.getString(1));
 		}
-		rs2.close();
+		rs.close();
 		System.out.println("Related columns : " + columns);
 
-		p = Pattern.compile("^how much");
-		m = p.matcher(input);
-		if (m.find()) {
-			System.out.println("how much?");
-			for (int i = 0; i < input_words.length; i++) {
-				if (isColumn(input_words[i])) {
-					projectionList.add("ifnull(sum(" + input_words[i]
-							+ "),0) total_of_" + input_words[i]);
-					break;
+		rs = conn_mysql.createStatement().executeQuery("select * from starter");
+		while (rs.next()) {
+			if (input.startsWith(rs.getString(2))) {
+				System.out.println("Starts with : " + rs.getString(2));
+				ArrayList<String> field = new ArrayList<String>();
+				if (rs.getString(3).equals("nverb.primary")) {
+					for (int i = 0; i < input_words.length; i++) {
+						if (isNonVerbTable(input_words[i])) {
+							field.add(getPrimaryColumn(input_words[i]));
+							break;
+						}
+					}
+				}
+				if (rs.getString(3).equals("nverb.all")) {
+					for (int i = 0; i < input_words.length; i++) {
+						if (isNonVerbTable(input_words[i])) {
+							field.addAll(getAllColumns(input_words[i]));
+							break;
+						}
+					}
+				}
+				if (rs.getString(3).equals("column")) {
+					for (int i = 0; i < input_words.length; i++) {
+						if (isColumn(input_words[i])) {
+							field.add(input_words[i]);
+						}
+					}
+				}
+				if (rs.getString(4) == null) {
+					projectionList.addAll(field);
+				} else {
+					projectionList.add(rs.getString(4).replace(
+							"[" + rs.getString(3) + "]", field.get(0)));
+				}
+				if (rs.getString(5) != null) {
+					groupList.addAll(field);
 				}
 			}
 		}
-		p = Pattern.compile("^(how many|count|number)");
-		m = p.matcher(input);
-		if (m.find()) {
-			System.out.println("how many?");
-			for (int i = 0; i < input_words.length; i++) {
-				if (isColumn(input_words[i])) {
-					projectionList.add("ifnull(count(distinct "
-							+ input_words[i] + "),0) count_of_"
-							+ input_words[i]);
-					break;
-				}
-				if (isNonVerbTable(input_words[i])) {
-					projectionList.add("ifnull(count(distinct "
-							+ getPrimaryColumn(input_words[i])
-							+ "),0) count_of_" + input_words[i]);
-					break;
-				}
-			}
-		}
-		p = Pattern.compile("^(what|show|display|find)");
-		m = p.matcher(input);
-		if (m.find()) {
-			System.out.println("what?");
-			for (int i = 0; i < input_words.length; i++) {
-				if (isNonVerbTable(input_words[i])) {
-					projectionList.addAll(getAllColumns(input_words[i]));
-					groupList.addAll(getAllColumns(input_words[i]));
-					break;
-				}
-			}
-		}
+		rs.close();
+
+		// p = Pattern.compile("^how much");
+		// m = p.matcher(input);
+		// if (m.find()) {
+		// System.out.println("how much?");
+		// for (int i = 0; i < input_words.length; i++) {
+		// if (isColumn(input_words[i])) {
+		// projectionList.add("ifnull(sum(" + input_words[i]
+		// + "),0) total_of_" + input_words[i]);
+		// break;
+		// }
+		// }
+		// }
+		// p = Pattern.compile("^(how many|count|number)");
+		// m = p.matcher(input);
+		// if (m.find()) {
+		// System.out.println("how many?");
+		// for (int i = 0; i < input_words.length; i++) {
+		// if (isColumn(input_words[i])) {
+		// projectionList.add("ifnull(count(distinct "
+		// + input_words[i] + "),0) count_of_"
+		// + input_words[i]);
+		// break;
+		// }
+		// if (isNonVerbTable(input_words[i])) {
+		// projectionList.add("ifnull(count(distinct "
+		// + getPrimaryColumn(input_words[i])
+		// + "),0) count_of_" + input_words[i]);
+		// break;
+		// }
+		// }
+		// }
+		// p = Pattern.compile("^(what|show|display|find|which)");
+		// m = p.matcher(input);
+		// if (m.find()) {
+		// System.out.println("what?");
+		// for (int i = 0; i < input_words.length; i++) {
+		// if (isNonVerbTable(input_words[i])) {
+		// projectionList.addAll(getAllColumns(input_words[i]));
+		// groupList.addAll(getAllColumns(input_words[i]));
+		// break;
+		// }
+		// }
+		// }
 
 		// projection list
-		rs2 = conn_mysql
+		rs = conn_mysql
 				.createStatement()
 				.executeQuery(
 						"select metadata_expression.id,expression,projection from metadata_expression,metadata_tables "
 								+ "where metadata_expression.table_id=metadata_tables.id and projection is not null and "
 								+ "metadata_tables.name in ("
 								+ listToCSVWithQuote(tables_in_use) + ")");
-		while (rs2.next()) {
-			p = Pattern.compile(rs2.getString("expression"));
+		while (rs.next()) {
+			p = Pattern.compile(rs.getString("expression"));
 			m = p.matcher(input);
 			if (m.find()) {
 				projectionList.add(evaluateExpressions(input,
-						rs2.getInt("metadata_expression.id"),
-						rs2.getString("metadata_expression.projection"),
+						rs.getInt("metadata_expression.id"),
+						rs.getString("metadata_expression.projection"),
 						conn_mysql, m.start(), m.end()));
 			}
 		}
-		rs2.close();
+		rs.close();
 
 		// condition list
-		rs2 = conn_mysql
+		rs = conn_mysql
 				.createStatement()
 				.executeQuery(
 						"select metadata_expression.id,expression,metadata_expression.condition from metadata_expression,metadata_tables where metadata_expression.table_id=metadata_tables.id and metadata_expression.condition is not null and metadata_tables.name in ("
 								+ listToCSVWithQuote(tables_in_use) + ")");
-		while (rs2.next()) {
-			p = Pattern.compile(rs2.getString("expression"));
+		while (rs.next()) {
+			p = Pattern.compile(rs.getString("expression"));
 			m = p.matcher(input);
 			while (m.find()) {
 				conditionList.add(evaluateExpressions(input,
-						rs2.getInt("metadata_expression.id"),
-						rs2.getString("metadata_expression.condition"),
+						rs.getInt("metadata_expression.id"),
+						rs.getString("metadata_expression.condition"),
 						conn_mysql, m.start(), m.end()));
 			}
 		}
-		rs2.close();
+		rs.close();
 
 		// order list
-		rs2 = conn_mysql
+		rs = conn_mysql
 				.createStatement()
 				.executeQuery(
 						"select metadata_expression.id,expression,metadata_expression.order from metadata_expression,metadata_tables where metadata_expression.table_id=metadata_tables.id and metadata_expression.order is not null and metadata_tables.name in ("
 								+ listToCSVWithQuote(tables_in_use) + ")");
-		while (rs2.next()) {
-			p = Pattern.compile(rs2.getString("expression"));
+		while (rs.next()) {
+			p = Pattern.compile(rs.getString("expression"));
 			m = p.matcher(input);
 			if (m.find()) {
 				orderList.add(evaluateExpressions(input,
-						rs2.getInt("metadata_expression.id"),
-						rs2.getString("metadata_expression.order"), conn_mysql,
+						rs.getInt("metadata_expression.id"),
+						rs.getString("metadata_expression.order"), conn_mysql,
 						m.start(), m.end()));
 			}
 		}
-		rs2.close();
+		rs.close();
 
 		// limit list
-		rs2 = conn_mysql
+		rs = conn_mysql
 				.createStatement()
 				.executeQuery(
 						"select metadata_expression.id,expression,metadata_expression.limit from metadata_expression,metadata_tables where metadata_expression.table_id=metadata_tables.id and metadata_expression.limit is not null and metadata_tables.name in ("
 								+ listToCSVWithQuote(tables_in_use) + ")");
-		while (rs2.next()) {
-			p = Pattern.compile(rs2.getString("expression"));
+		while (rs.next()) {
+			p = Pattern.compile(rs.getString("expression"));
 			m = p.matcher(input);
 			if (m.find()) {
 				limitList.add(evaluateExpressions(input,
-						rs2.getInt("metadata_expression.id"),
-						rs2.getString("metadata_expression.limit"), conn_mysql,
+						rs.getInt("metadata_expression.id"),
+						rs.getString("metadata_expression.limit"), conn_mysql,
 						m.start(), m.end()));
 			}
 		}
-		rs2.close();
+		rs.close();
 
 		// having list
-		rs2 = conn_mysql
+		rs = conn_mysql
 				.createStatement()
 				.executeQuery(
 						"select metadata_expression.id,expression,metadata_expression.having from metadata_expression,metadata_tables where metadata_expression.table_id=metadata_tables.id and metadata_expression.having is not null and metadata_tables.name in ("
 								+ listToCSVWithQuote(tables_in_use) + ")");
-		while (rs2.next()) {
-			p = Pattern.compile(rs2.getString("expression"));
+		while (rs.next()) {
+			p = Pattern.compile(rs.getString("expression"));
 			m = p.matcher(input);
 			if (m.find()) {
 				havingList.add(evaluateExpressions(input,
-						rs2.getInt("metadata_expression.id"),
-						rs2.getString("metadata_expression.having"),
-						conn_mysql, m.start(), m.end()));
+						rs.getInt("metadata_expression.id"),
+						rs.getString("metadata_expression.having"), conn_mysql,
+						m.start(), m.end()));
 			}
 		}
-		rs2.close();
+		rs.close();
 		String SQL = completeQuery(projectionList, conditionList, orderList,
 				limitList, groupList, havingList, tables_in_use, conn_mysql);
-
 		return SQL;
 	}
 
@@ -478,14 +519,15 @@ public class app2 {
 		while (rs.next()) {
 			SQL = getSQL(rs.getString("input"), conn_mysql);
 			System.out.println(SQL);
+			System.out.println();
 		}
 		rs.close();
 
-		if (SQL != null) {
-			rs = statement.executeQuery(SQL);
-			JSONArray json = convert(rs);
-			System.out.println(json);
-		}
+		// if (SQL != null) {
+		// rs = statement.executeQuery(SQL);
+		// JSONArray json = convert(rs);
+		// System.out.println(json);
+		// }
 
 		conn_mysql.close();
 	}
